@@ -1,0 +1,23 @@
+apply plugin: 'application'
+apply plugin: 'java-library'
+
+mainClassName = "com.strider.trading.SmartTraderDemo"
+sourceCompatibility = javaVersion
+
+group 'com.strider.trading'
+version projectVersion
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation group: 'com.espertech', name: 'esper', version: esperVersion
+    implementation group: 'commons-logging', name: 'commons-logging', version: commonLoggingVersion
+    implementation group: 'ch.qos.logback', name: 'logback-core', version: logbackVersion
+    implementation group: 'ch.qos.logback', name: 'logback-classic', version: logbackVersion
+//    implementation group: 'joda-time', name: 'joda-time', version: jodaTimeVersion
+    implementation fileTree(dir: 'lib', include: '*.jar')
+
+    testImplementation group: 'junit', name: 'junit', version: junitVersion
+}
