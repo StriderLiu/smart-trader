@@ -1,28 +1,48 @@
 package com.strider.trading.interactive_brokers;
 
 import com.ib.client.*;
+import com.strider.trading.SmartTraderDemo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class InteractiveBrokerImpl implements EWrapper {
 
     private EJavaSignal m_signal;
     private EClientSocket m_client;
     private EReader m_reader;
-    private static InteractiveBrokerImpl instance;
+    private static final Logger LOG = LoggerFactory.getLogger(SmartTraderDemo.class);
+    private static final int NUMBER_OF_WORKER_THREADS = 1;
+    private static InteractiveBrokerImpl s_instance;
+
+    private final Lock m_lock = new ReentrantLock();
+    private final Condition m_contractDataNotReady = m_lock.newCondition();
+    private Map<Integer, ContractDetails> m_contractDetailsMap;
+    private ExecutorService executor;
 
     private InteractiveBrokerImpl() {
         m_signal = new EJavaSignal();
         m_client = new EClientSocket( this, m_signal);
+        m_contractDetailsMap = new HashMap<>();
+        executor = Executors.newFixedThreadPool(NUMBER_OF_WORKER_THREADS);
     }
 
+    // Singleton can only be accessed via this method
     public static InteractiveBrokerImpl getInctance() {
-        if (instance == null) {
-            instance = new InteractiveBrokerImpl();
+        if (s_instance == null) {
+            s_instance = new InteractiveBrokerImpl();
         }
-        return instance;
+        return s_instance;
     }
 
     public boolean connect(String ipAddress, int port, int clientId) {
@@ -33,14 +53,38 @@ public class InteractiveBrokerImpl implements EWrapper {
         m_client.optionalCapabilities("");
         m_client.eConnect(ipAddress, port, clientId);
 
+        LOG.debug("Has the application connected to TWS? " + (m_client.isConnected() ? "YES" : "NO"));
+
         m_reader = new EReader(m_client, m_signal);
         m_reader.start();
 
-        new Thread(() -> {
+        // somehow the connection is lost after we initialize the EReader object
+        LOG.debug("Has the application connected to TWS? " + (m_client.isConnected() ? "YES" : "NO"));
+
+        executor.submit(() -> {
             processMessages();
-        }).start();
+        });
 
         return m_client.isConnected();
+    }
+
+    public void disconnect() {
+        m_client.eDisconnect();
+
+        // shutdown executor service
+        try {
+            System.out.println("attempt to shutdown executor");
+            executor.shutdown();
+            executor.awaitTermination(5, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            System.err.println("tasks interrupted");
+        } finally {
+            if (!executor.isTerminated()) {
+                System.err.println("cancel non-finished tasks");
+            }
+            executor.shutdownNow();
+            System.out.println("shutdown finished");
+        }
     }
 
     private void processMessages() {
@@ -52,6 +96,38 @@ public class InteractiveBrokerImpl implements EWrapper {
                 error(e);
             }
         }
+    }
+
+    @Override
+    public void contractDetails(int reqId, ContractDetails contractDetails) {
+        m_lock.lock();
+        try {
+            m_contractDetailsMap.put(reqId, contractDetails);
+            m_contractDataNotReady.signal();
+        } catch (Exception ex) {
+            LOG.error(ex.getMessage());
+            ex.printStackTrace();
+        } finally {
+            m_lock.unlock();
+        }
+    }
+
+    public ContractDetails getContractDetails(int reqId, Contract contract) {
+        m_client.reqContractDetails(reqId, contract);
+        ContractDetails cd = null;
+        m_lock.lock();
+        try {
+            while (!m_contractDetailsMap.containsKey(reqId)) {
+                m_contractDataNotReady.await();
+            }
+            cd = m_contractDetailsMap.get(reqId);
+        } catch (Exception ex) {
+            LOG.error(ex.getMessage());
+            ex.printStackTrace();
+        } finally {
+            m_lock.unlock();
+        }
+        return cd;
     }
 
     @Override
@@ -121,11 +197,6 @@ public class InteractiveBrokerImpl implements EWrapper {
 
     @Override
     public void nextValidId(int i) {
-
-    }
-
-    @Override
-    public void contractDetails(int i, ContractDetails contractDetails) {
 
     }
 

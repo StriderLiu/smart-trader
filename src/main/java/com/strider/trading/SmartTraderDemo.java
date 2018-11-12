@@ -1,7 +1,8 @@
 package com.strider.trading;
 
+import com.ib.client.Contract;
+import com.ib.client.ContractDetails;
 import com.strider.trading.interactive_brokers.IBUtility;
-import com.strider.trading.security.Stock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,7 +14,24 @@ public class SmartTraderDemo {
 
     private static final LocalTime MARKET_OPENING_TIME = LocalTime.of(9, 30);
     private static final LocalTime MARKET_CLOSING_TIME = LocalTime.of(4, 0);
-    private static final String FAVORITE_STOCK_TICKER = "F";
+    private static final Contract CONTRACT;
+
+    static {
+        CONTRACT = new Contract();
+        CONTRACT.symbol("F");
+        CONTRACT.secType("STK");
+        CONTRACT.currency("USD");
+        CONTRACT.exchange("SMART");
+        CONTRACT.primaryExch("NYSE");
+        CONTRACT.lastTradeDateOrContractMonth("");
+        CONTRACT.strike(0.0);
+        CONTRACT.right("");
+        CONTRACT.multiplier("");
+        CONTRACT.localSymbol("");
+        CONTRACT.tradingClass("");
+        CONTRACT.secIdType("");
+        CONTRACT.secId("");
+    }
 
     /**
      * Main method - start the Demo!
@@ -22,27 +40,39 @@ public class SmartTraderDemo {
 
         LOG.debug("Starting...");
 
-        IBUtility.connect("127.0.0.1", 7497, 1);
+        if (IBUtility.connect("127.0.0.1", 7497, 1)) {
+            LOG.debug("Connected to TWS successfully!");
+        }
 
-        Stock stock = getStockInfo(FAVORITE_STOCK_TICKER);
-        getOpenRangeOfToday();
+        ContractDetails stockDetail = getContractDetails(CONTRACT);
+        LOG.debug("Start to fetch data for: " + stockDetail.contract().symbol()
+                + "\nDescription: \n" + stockDetail.contract().description()
+                + "\nExchange: \n" + stockDetail.contract().exchange()
+                + "\nPrimary Exchange: \n" + stockDetail.contract().primaryExch());
+
+        getOpenRangeOfToday(MARKET_OPENING_TIME);
 
 //        // Start Demo
 //        RandomEventGenerator generator = new RandomEventGenerator();
 //        generator.startSendingStockReadings(noOfStockEvents);
-        startSendingStockReadings();
+
+//        startSendingStockReadings();
+        disconnect();
     }
 
-    private static Stock getStockInfo(String stockName) {
-        return IBUtility.requestContract(stockName);
+    private static void disconnect() {
+        IBUtility.disconnect();
     }
 
-    private static void getOpenRangeOfToday() {
-        IBUtility.getOpenRangeOfToday();
+    private static ContractDetails getContractDetails(Contract contract) {
+        return IBUtility.getContractDetails(contract);
+    }
+
+    private static void getOpenRangeOfToday(LocalTime startTime) {
+        IBUtility.getOpenRangeOfToday(startTime);
     }
 
     private static void startSendingStockReadings() {
     }
-
 
 }

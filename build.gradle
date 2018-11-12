@@ -16,7 +16,6 @@ dependencies {
     implementation group: 'commons-logging', name: 'commons-logging', version: commonLoggingVersion
     implementation group: 'ch.qos.logback', name: 'logback-core', version: logbackVersion
     implementation group: 'ch.qos.logback', name: 'logback-classic', version: logbackVersion
-//    implementation group: 'joda-time', name: 'joda-time', version: jodaTimeVersion
     implementation fileTree(dir: 'lib', include: '*.jar')
 
     testImplementation group: 'junit', name: 'junit', version: junitVersion
